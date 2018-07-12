@@ -1,7 +1,7 @@
 setwd("E:/Computational Science/Sommersemester 2018/Data Discovery/Pro")
 #options(java.parameters = "-Xmx2048m")
 #rm(list=ls())
-
+library(grid)
 library(Matrix)
 library(fpc)
 library(arules)
@@ -17,6 +17,11 @@ library(shiny)
 library(stringr)
 library(corrplot)
 library(RColorBrewer)
+library(arulesViz)
+
+
+
+
 
 #What is the the Benefit?
 #Sending customized ads to special segments of customers
@@ -56,8 +61,19 @@ not_missing.df =  full_group_c.df %>% filter(!is.na(CustomerID))
 full_group_Id.df = not_missing.df %>% bind_rows(missing.df)
 
 
+#retail <- retail[complete.cases(retail), ]
+full_group_Id.df <- full_group_Id.df %>% mutate(Description = as.factor(Description))
+full_group_Id.df <- full_group_Id.df %>% mutate(Country = as.factor(Country))
+full_group_Id.df$Date <- as.Date(full_group_Id.df$InvoiceDate)
+full_group_Id.df$Time <- format(full_group_Id.df$InvoiceDate,"%H:%M:%S")
+#full_group_Id.df$InvoiceNo <- as.numeric(as.character(full_group_Id.df$InvoiceNo))
 
 
+full_group_Id.df = full_group_Id.df %>% filter(grepl("WHITE",Description) | grepl("BLACK",Description) | grepl("RED",Description) | grepl("BLUE",Description)
+                                    | grepl("GREEN",Description)| grepl("PINK",Description), Quantity >=0)
+
+
+str(full_group_Id.df$Description)
 #Erstelle einen CustomerID Profil um profitable Kunden zu entdecken
 customer.df = full_group_Id.df %>% 
                               mutate( Quantity = ifelse( Quantity >=0 , Quantity  , 0  ) )%>%
@@ -100,6 +116,10 @@ full_time_customer.df = full_time_customer.df %>%
                            mutate( margin_11Month = ifelse( !is.na(margin_11Month), margin_11Month  , 0  ) ) 
 
 
+
+
+
+
 #which direction is going margin
 full_time_customer.df %>% summarise( meanlast = mean(margin_last_month),
                                      meanelf  = mean(margin_11Month)/11,
@@ -134,27 +154,61 @@ customer_money_spend=full_time_customer.df %>% mutate(class = ifelse(margin >2.8
 
 #full_group_g= left_join(full_time_customer.df, customer_money_spend, by="CustomerID")
 
-
-
-class1 = customer_money_spend %>% filter(class == 1)
-class2 = customer_money_spend %>% filter(class == 2)
-class3 = customer_money_spend %>% filter(class == 3)
-class4 = customer_money_spend %>% filter(class == 4)
-
-
 customer_full_class = customer_money_spend %>% select(CustomerID, class) %>% right_join(full_group_Id.df, by="CustomerID")
 
 
+
+
+
+
+
+
+
+
 transaction_class4 = customer_full_class %>% filter(class==4)
+
 transaction_class3 = customer_full_class %>% filter(class==3)
 transaction_class2 = customer_full_class %>% filter(class==2)
+
+
 transaction_class1 = customer_full_class %>% filter(class==1)
 
 
 
 class4 <- as(split(transaction_class4$Description, transaction_class4[,"InvoiceNo"]), "transactions")
+class1 <- as(split(transaction_class1$Description, transaction_class4[,"InvoiceNo"]), "transactions")
+class2 <- as(split(transaction_class2$Description, transaction_class4[,"InvoiceNo"]), "transactions")
+class3 <- as(split(transaction_class3$Description, transaction_class4[,"InvoiceNo"]), "transactions")
 
 summary(class4)
+
+
+
+itemFrequencyPlot(class2,
+                  type="absolute",
+                  topN=10,
+                  horiz=TRUE,
+                  col='steelblue3',
+                  xlab='',
+                  main='Item frequency in class 2 Customer')
+
+
+itemFrequencyPlot(class3,
+                  type="absolute",
+                  topN=10,
+                  horiz=TRUE,
+                  col='steelblue3',
+                  xlab='',
+                  main='Item frequency in class 3 Customer')
+
+itemFrequencyPlot(class1,
+                  type="absolute",
+                  topN=10,
+                  horiz=TRUE,
+                  col='steelblue3',
+                  xlab='',
+                  main='Item frequency in class 1 Customer')
+
 
 itemFrequencyPlot(class4,
                   type="absolute",
@@ -165,7 +219,14 @@ itemFrequencyPlot(class4,
                   main='Item frequency in class 4 Customer')
 
 
+
 trans_action_all <- as(split(full_group_Id.df$Description, full_group_Id.df[,"InvoiceNo"]), "transactions")
+
+
+
+inspect(trans_action_all[1:10 ])
+
+
 
 itemFrequencyPlot(trans_action_all,
                   type="absolute",
@@ -182,22 +243,160 @@ itemFrequencyPlot(class4,
                   type="relative",
                   ylab="Item Frequency")
 
-transaction_rules_special <- apriori(trans_action_all, 
-                                parameter = list(supp=0.001, conf=0.1,target="rules"),
-                                appearance = list(default ="rhs", lhs="WHITE HANGING HEART T-LIGHT HOLDER")
-                                )
-inspect(transaction_rules_special)
+
+inspect(class4[1:10])
+
+transaction_rules_special <- 
+  apriori(trans_action_all, 
+   parameter = list(supp=0.001, conf=0.09,target="rules"),
+  appearance = list(default ="rhs", lhs="WHITE HANGING HEART T-LIGHT HOLDER")
+            )
 
 
-transaction_rules <- apriori(class4, 
+top <- sort(transaction_rules_special, decreasing = TRUE, na.last = NA, by = "confidence")
+
+
+inspect(top)
+top10Rules <- transaction_rules_special[1:10]
+plot(top10Rules, method="graph")
+
+trans_action_color <- as(split(full_group_Id.df$Description, full_group_Id.df[,"InvoiceNo"]), "transactions")
+
+
+
+
+#transaction for class4 customer
+transaction_rules <- apriori(trans_action_all, 
                              parameter = list(supp=0.015, conf=0.7,target="rules"))
 inspect(transaction_rules)
 
 
-
+#How is sales for number 1 item developing
 ACBO.df = full_group_Id.df %>% group_by(Description) %>% filter(Description == "WHITE HANGING HEART T-LIGHT HOLDER")
-
 ACBO.df %>% filter(Quantity >0) %>%
 ggplot(aes(InvoiceDate, Quantity)) + geom_point() + geom_smooth(method = lm, se = FALSE) 
+
+
+
+##Most bought items
+tmp <- full_group_Id.df %>% 
+  group_by(StockCode, Description) %>% 
+  summarize(count = n()) %>% 
+  arrange(desc(count))
+tmp <- head(tmp, n=10)
+tmp
+tmp %>% 
+  ggplot(aes(x=reorder(Description,count), y=count))+
+  geom_bar(stat="identity",fill="green")+
+  coord_flip()
+
+
+
+#color = full_group_Id.df %>% filter(grepl("WHITE",Description) | grepl("BLACK",Description) | grepl("RED",Description) | grepl("BLUE",Description)
+ #                                   | grepl("GREEN",Description)| grepl("PINK",Description), Quantity >=0)
+
+head(color)
+
+trans_action_color <- as(split(color$Description, color[,"InvoiceNo"]), "transactions")
+
+
+itemFrequencyPlot(trans_action_color,
+                  topN=20,
+                  col=brewer.pal(8,'Pastel2'),
+                  main='Relative Item Frequency Plot',
+                  type="relative",
+                  ylab="Item Frequency")
+
+image(top10ColorRules, method="graph")
+
+
+transaction_rules_color <- apriori(trans_action_color, 
+                             parameter = list(supp=0.015, conf=0.7,target="rules"))
+
+
+top <- sort(transaction_rules_color, decreasing = TRUE, na.last = NA, by = "confidence")
+
+
+
+
+inspect(transaction_rules_color[1:19])
+
+
+
+
+#what hour does the customer buy?
+#full_group_Id.df$Time <- as.factor(full_time_customer.df$Time)
+#a <- hms(as.character(full_group_Id.df$Time))
+#full_group_Id.df$Time = hour(a)
+full_group_Id.df %>% 
+  ggplot(aes(x=Time)) + 
+  geom_histogram(stat="count",fill="blue")
+
+
+
+
+
+#d=full_group_Id.df %>% left_join(customer_full_class, by="CustomerID")
+
+
+
+
+
+
+transaction_rules_special <- 
+  apriori(trans_action_color, 
+          parameter = list(supp=0.001, conf=0.09,target="rules"),
+          appearance = list(default ="rhs", lhs="WHITE HANGING HEART T-LIGHT HOLDER"))
+
+
+
+
+
+top <- sort(transaction_rules_special, decreasing = TRUE, na.last = NA, by = "confidence")
+
+str(transaction_rules_special)
+
+top10Rules <- transaction_rules_special[c(3,5,7,11,12,13,14,15,16)]
+
+inspect(top10Rules)
+plot(top10Rules, method="graph")
+
+
+
+
+
+
+
+
+transaction_rules_color_class1 <- apriori(class1, 
+                                   parameter = list(supp=0.007, conf=0.7,target="rules"))
+
+redundant <- which (colSums (is.subset (transaction_rules_color_class1, transaction_rules_color_class1)) > 1) # get redundant rules in vector
+
+transaction_rules_color_class1 <- transaction_rules_color_class1[-redundant] # remove redundant rules
+
+
+
+transaction_rules_color_class1 <- sort(transaction_rules_color, decreasing = TRUE, na.last = NA, by = "confidence")
+
+
+
+df = data.frame(
+  lhs = labels(lhs(transaction_rules_color_class1)),
+  rhs = labels(rhs(transaction_rules_color_class1)), 
+  transaction_rules_color_class1@quality)
+
+
+df %>% filter(grepl("PINK",lhs), grepl("GREEN",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+df %>% filter(grepl("RED",lhs), grepl("RED",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+
+df %>% filter(grepl("PINK",lhs), grepl("RED",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+df %>% filter(grepl("GREEN",lhs), grepl("PINK",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+
+
+df %>% filter(grepl("WHITE",lhs), grepl("RED",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+
+df %>% filter(grepl("BLUE",lhs), grepl("RED",rhs)) %>% summarise(m_support = mean(support), m_confidence = mean(confidence))
+
 
 
