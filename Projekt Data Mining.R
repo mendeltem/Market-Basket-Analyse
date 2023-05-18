@@ -19,6 +19,39 @@ library(corrplot)
 library(RColorBrewer)
 library(arulesViz)
 
+create_transactions <- function(df, class_num) {
+    transactions <- df %>% filter(class == class_num)
+    transactions <- as(split(transactions$Description, transactions[,"InvoiceNo"]), "transactions")
+    return(transactions)
+}
+
+item_frequency_plot <- function(transactions, class_num) {
+    itemFrequencyPlot(transactions,
+                      type = "absolute",
+                      topN = 10,
+                      horiz = TRUE,
+                      col = 'steelblue3',
+                      xlab = '',
+                      main = paste('Item frequency in class', class_num, 'Customer'))
+}
+
+create_rules <- function(transactions) {
+    transaction_rules <- apriori(transactions, 
+                                 parameter = list(supp = 0.015, conf = 0.7, target = "rules"))
+    return(transaction_rules)
+}
+
+customer_full_class = customer_money_spend %>% select(CustomerID, class) %>% right_join(full_group_Id.df, by = "CustomerID")
+
+classes <- c(1, 2, 3, 4)
+
+for (class_num in classes) {
+    transactions <- create_transactions(customer_full_class, class_num)
+    item_frequency_plot(transactions, class_num)
+    transaction_rules <- create_rules(transactions)
+    print(transaction_rules)
+}
+
 
 
 
@@ -28,11 +61,11 @@ library(arulesViz)
 
 
 # Wir wollen die viel versprechendsten Waren finden die vom vielversprechendsten Kunden gekauft werden.
-# Mit den Waren wollen wir eine Market Basket Analyse durchführen so dass wir eine Gezielt Verkaufstacktik dazu 
-# erstellen können.
+# Mit den Waren wollen wir eine Market Basket Analyse durchfÃ¼hren so dass wir eine Gezielt Verkaufstacktik dazu 
+# erstellen kÃ¶nnen.
 # Das Problem ist die schier riesige Datenmenge und daruas sollte ich eine gewinnbringende Strategie 
-# für Firmen allgemein finden.
-# Was kann ich tun damit die Unternehmen aus dem Verkauf möglichst beste Gewinnbringende Information 
+# fÃ¼r Firmen allgemein finden.
+# Was kann ich tun damit die Unternehmen aus dem Verkauf mÃ¶glichst beste Gewinnbringende Information 
 #extrahieren kann
 
 #import the data from xlsx
@@ -50,7 +83,7 @@ full_group_c.df = cancel.df %>% bind_rows(not_cancel.df )
 #verkleinere um schneller zu arbeiten
 #sample = cleaned_df[sample(nrow(cleaned_df),0.01*length(cleaned_df$InvoiceDate)),]
 #Suche mir die Missing CustomerID
-#generiere für jede missing InvoiseNo eine eigene Nummer
+#generiere fÃ¼r jede missing InvoiseNo eine eigene Nummer
 
 missing.df = full_group_c.df %>% group_by(InvoiceNo) %>%
                      filter(is.na(CustomerID)) %>%
@@ -141,7 +174,7 @@ x=full_time_customer.df %>%
 
 
 
-#Noch muss Zeitinterval hinzufügen weil jetzt Kundengesammtausgaben berechnet werden 
+#Noch muss Zeitinterval hinzufÃ¼gen weil jetzt Kundengesammtausgaben berechnet werden 
 #statt durchscihnittliche ausgabe
 summary(full_time_customer.df$margin)
 
